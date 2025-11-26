@@ -11,11 +11,23 @@ function App() {
   }, [])
 
   const fetchQuejas = async () => {
-    const { data } = await supabase
-      .from('quejas')
-      .select('*')
-      .order('created_at', { ascending: false })
-    setQuejas(data)
+    try {
+      const { data, error } = await supabase
+        .from('quejas')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error fetching quejas:', error)
+        return
+      }
+
+      if (data) {
+        setQuejas(data)
+      }
+    } catch (err) {
+      console.error('Unexpected error:', err)
+    }
   }
 
   // 2. Enviar una queja
@@ -26,7 +38,7 @@ function App() {
     await supabase
       .from('quejas')
       .insert([{ texto: nuevaQueja }])
-    
+
     setNuevaQueja('')
     fetchQuejas() // Recargar la lista
   }
