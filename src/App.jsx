@@ -4,10 +4,27 @@ import { supabase } from './supabaseClient'
 function App() {
   const [quejas, setQuejas] = useState([])
   const [nuevaQueja, setNuevaQueja] = useState('')
+  const [isTyping, setIsTyping] = useState(false)
 
-  // 1. Cargar las quejas al iniciar
+  // 1. Cargar las quejas al iniciar y suscribirse a cambios
   useEffect(() => {
     fetchQuejas()
+
+    // Suscripción a Realtime
+    const channel = supabase
+      .channel('realtime:quejas')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'quejas' }, (payload) => {
+        setQuejas((prev) => [payload.new, ...prev])
+      })
+      .on('broadcast', { event: 'typing' }, () => {
+        setIsTyping(true)
+        setTimeout(() => setIsTyping(false), 3000)
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const fetchQuejas = async () => {
@@ -40,7 +57,15 @@ function App() {
       .insert([{ texto: nuevaQueja }])
 
     setNuevaQueja('')
-    fetchQuejas() // Recargar la lista
+    // No necesitamos fetchQuejas() porque la suscripción lo actualizará
+  }
+
+  const handleTyping = async (e) => {
+    setNuevaQueja(e.target.value)
+    await supabase.channel('realtime:quejas').send({
+      type: 'broadcast',
+      event: 'typing',
+    })
   }
 
   return (
@@ -52,7 +77,7 @@ function App() {
         <input
           type="text"
           value={nuevaQueja}
-          onChange={(e) => setNuevaQueja(e.target.value)}
+          onChange={handleTyping}
           placeholder="¿De qué te quieres quejar hoy?"
           className="flex-1 p-3 rounded bg-gray-800 border border-gray-700 focus:outline-none focus:border-pink-500"
         />
@@ -60,6 +85,13 @@ function App() {
           Gritar
         </button>
       </form>
+
+      {/* Indicador de escribiendo */}
+      {isTyping && (
+        <p className="text-pink-400 text-sm mb-4 animate-pulse">
+          Alguien está escribiendo su furia...
+        </p>
+      )}
 
       {/* Lista de Quejas */}
       <div className="w-full max-w-md space-y-4">
